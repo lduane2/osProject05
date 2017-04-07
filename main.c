@@ -15,9 +15,41 @@ how to use the page table and disk interfaces.
 #include <string.h>
 #include <errno.h>
 
+//struct disk *disk = disk_open("myvirtualdisk",npages);
+int numPages;
+int numFrames;
+int pageFaults;
+int  frame;
+int * bits;
+const char *rep;
+const char *prog;
+struct disk *gdisk;
+
+int * frametable; //indicates which frames have been used
+int * tqueue;
+
+void rand(struct page_table, int);
+void fifo(struct page_table, int);
+void custom(struct page_table, int);
+
+
+
 void page_fault_handler( struct page_table *pt, int page )
 {
 	printf("page fault on page #%d\n",page);
+	
+	if (strcmp(prog,"rand")) {
+		rand(*pt, page);
+	}
+	
+	if (strcmp(prog,"fifo")) {
+		fifo(*pt, page);
+	}
+	
+	if (strcmp(prog,"custom")) {
+		custom(*pt,page);
+	}
+	
 	exit(1);
 }
 
@@ -30,12 +62,29 @@ int main( int argc, char *argv[] )
 
 	int npages = atoi(argv[1]);
 	int nframes = atoi(argv[2]);
+	const char *repAlg = argv[3];
 	const char *program = argv[4];
+	
+	numPages = npages;
+	numFrames = nframes;
+	if (numFrames > numPages) {
+		numFrames = numPages;
+	}
+	
+	table = malloc(numPages*sizeof(int));
+	int i;
+	for (i = 0; i < numPages; i += 1) {
+		table[i] = 0;
+	}
+	rep = repAlg;
+	prog = program;
 
 	struct disk *disk = disk_open("myvirtualdisk",npages);
 	if(!disk) {
 		fprintf(stderr,"couldn't create virtual disk: %s\n",strerror(errno));
 		return 1;
+	} else {
+		gdisk = disk;	
 	}
 
 
@@ -68,3 +117,36 @@ int main( int argc, char *argv[] )
 
 	return 0;
 }
+
+void rand(struct page_table *pt, int page) {
+	page_table_get_entry(pt,page,&frame,&bits);
+	if(bits[0] == 0) { //nothing there
+		//access queue of pages
+		int i = 0;
+		while(table[i] || i != numFrames) i++;
+		if(i != numFrames) table[i] = 1;
+		//else do random removal
+		frame = i;
+		//tqueue.push_back(frame);
+		page_table_set_entry(pt,page,frame, PROT_READ);
+		disk_read(gdisk,page,&physmem(frame*PAGE_SIZE))
+	} else if (bits[1] == 0) { //read but not write
+		page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+	}
+	
+	//add to back of queue
+	//generate random number
+	//get value from queue at ptr*rand number
+	
+}
+
+void fifo(struct page_table, int page) {
+	//add to
+	//push back function or something?
+}
+
+void custom(struct page_table, int page) {
+	
+}
+
+
