@@ -25,30 +25,63 @@ const char *rep;
 const char *prog;
 struct disk *gdisk;
 
-int * frametable; //indicates which frames have been used
-int * tqueue;
 
-void rand(struct page_table, int);
-void fifo(struct page_table, int);
-void custom(struct page_table, int);
+int frameCounter = 0;
+int phase = 1;
 
+void evict(int);
+void load(int);
 
+struct mapTable {
+	int VPN = 0;
+	int PF = 0;
+	//more metadata
+}
 
 void page_fault_handler( struct page_table *pt, int page )
 {
 	printf("page fault on page #%d\n",page);
 	
-	if (strcmp(prog,"rand")) {
-		rand(*pt, page);
-	}
+	//phase 1
+	//page_table_get_entry(pt,page,&frame,&bits);
+	if(frameCounter == numFrames) phase = 2;
+	if(phase == 1) {
+		frame = fameCounter;
+		page_table_set_entry(pt,page,frame, PROT_READ);
+		disk_read(gdisk,page,&physmem(frame*PAGE_SIZE));
+		frameCounter++;
+	} else { //phase 2
+		page_table_get_entry(pt,page,&frame,&bits);
+		if (strcmp(prog,"rand")) {
+			if (bits[1] == 0) { //read but not write
+				//get random number
+				//get page and frame of that number
+				//evict(randpage,randframe);
+				//load(page,randframe)
+				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+			} else { //read and write
+				
+			}
+		}
 	
-	if (strcmp(prog,"fifo")) {
-		fifo(*pt, page);
-	}
+		if (strcmp(prog,"fifo")) {
+			if (bits[1] == 0) { //read but not write
+				//get frameCounter number
+				//evict(frameCounter frame)
+				//load(page.frameCounter frame)
+				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+				frameCounter++;
+				if (frameCounter == numFrames) frameCounter = 0;
+			}
+		}
 	
-	if (strcmp(prog,"custom")) {
-		custom(*pt,page);
+		if (strcmp(prog,"custom")) {
+			if (bits[1] == 0) { //read but not write
+				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+			}
+		}
 	}
+
 	
 	exit(1);
 }
@@ -118,35 +151,13 @@ int main( int argc, char *argv[] )
 	return 0;
 }
 
-void rand(struct page_table *pt, int page) {
-	page_table_get_entry(pt,page,&frame,&bits);
-	if(bits[0] == 0) { //nothing there
-		//access queue of pages
-		int i = 0;
-		while(table[i] || i != numFrames) i++;
-		if(i != numFrames) table[i] = 1;
-		//else do random removal
-		frame = i;
-		//tqueue.push_back(frame);
-		page_table_set_entry(pt,page,frame, PROT_READ);
-		disk_read(gdisk,page,&physmem(frame*PAGE_SIZE))
-	} else if (bits[1] == 0) { //read but not write
-		page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
-	}
-	
-	//add to back of queue
-	//generate random number
-	//get value from queue at ptr*rand number
-	
+void evict(int page, int frame) {
+	disk_write(gdisk,page, &physmem[frame*PAGE_SIZE]);
+	//go into mapTable and update info
 }
 
-void fifo(struct page_table, int page) {
-	//add to
-	//push back function or something?
+void load(int page, int frame) {
+	disk read();
+	//go into mapTable and update info
 }
-
-void custom(struct page_table, int page) {
-	
-}
-
 
