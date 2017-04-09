@@ -14,80 +14,105 @@ how to use the page table and disk interfaces.
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
+
+
 
 //struct disk *disk = disk_open("myvirtualdisk",npages);
 int numPages;
 int numFrames;
 int pageFaults;
 int  frame;
-int * bits;
+int  * bits;
 const char *rep;
 const char *prog;
-struct disk *gdisk;
+char * virtmem;
+char * physmem;
+//struct disk *gdisk;
+struct disk *disk;
 
 
+int currPageNumber = -1;
 int frameCounter = 0;
 int phase = 1;
 
-void evict(int);
-void load(int);
+int * queue;
 
-struct mapTable {
-	int VPN = 0;
-	int PF = 0;
-	//more metadata
-}
+int r = 0;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
 	printf("page fault on page #%d\n",page);
-	
+	//virtmem = page_table_get_virtmem(pt);
+	physmem = page_table_get_physmem(pt);
 	//phase 1
 	//page_table_get_entry(pt,page,&frame,&bits);
-	if(frameCounter == numFrames) phase = 2;
+	if(frameCounter == numFrames) {
+		printf("We are here \n");
+		phase = 2;
+		frameCounter = 0;
+	}
+	
+	page_table_get_entry(pt,page,&frame,bits);
+	
 	if(phase == 1) {
-		frame = fameCounter;
-		page_table_set_entry(pt,page,frame, PROT_READ);
-		disk_read(gdisk,page,&physmem(frame*PAGE_SIZE));
-		frameCounter++;
+		if(bits[0] == 0) {
+			frame = frameCounter;
+			page_table_set_entry(pt,page,frame, PROT_READ);
+			disk_read(disk,page,&physmem[frame*PAGE_SIZE]);
+			queue[frame] = page;
+			printf("queue[%d] = %d \n",frame, page);
+			frameCounter++;
+		} else {
+			page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+		}
 	} else { //phase 2
-		page_table_get_entry(pt,page,&frame,&bits);
-		if (strcmp(prog,"rand")) {
-			if (bits[1] == 0) { //read but not write
-				//get random number
-				//get page and frame of that number
-				//evict(randpage,randframe);
-				//load(page,randframe)
-				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
-			} else { //read and write
-				
-			}
-		}
+		page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+		//return 0;
 	
-		if (strcmp(prog,"fifo")) {
-			if (bits[1] == 0) { //read but not write
-				//get frameCounter number
-				//evict(frameCounter frame)
-				//load(page.frameCounter frame)
-				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
-				frameCounter++;
-				if (frameCounter == numFrames) frameCounter = 0;
+		printf("%s \n", rep);
+		if (!strcmp(rep,"rand")) {
+			//srand(time(NULL));
+			r = rand()%numFrames;
+			frame = r;
+			printf("frame: %d \n",r);
+		} else if (!strcmp(rep,"fifo")) {
+			frame = frameCounter;
+			printf("frame: %d \n", frame);
+			frameCounter++;
+			if (frameCounter == numFrames) {
+				frameCounter = 0;
 			}
+		} else if (!strcmp(rep,"custom")) {
+			//make up algorithm
 		}
-	
-		if (strcmp(prog,"custom")) {
-			if (bits[1] == 0) { //read but not write
-				page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
-			}
+		
+		printf("here \n");
+		
+		currPageNumber = queue[frame];
+		
+		if (bits[0] == 0) { //nothing there
+			disk_write(disk, currPageNumber, &physmem[frame*PAGE_SIZE]);
+			disk_read(disk, page, &physmem[frame*PAGE_SIZE]);
+			page_table_set_entry(pt,page,frame,PROT_READ);
+			page_table_set_entry(pt,currPageNumber,0,0);
+			queue[frame] = page;
+			printf("queue[%d] = %d \n",frame, page);
+		} else if (bits[1] == 0) { //read but not write
+			printf("entered \n");
+			page_table_get_entry(pt,page,&frame,bits);
+			page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
 		}
+		
 	}
 
 	
-	exit(1);
+	//exit(1);
 }
 
 int main( int argc, char *argv[] )
 {
+	srand(time(NULL));
 	if(argc!=5) {
 		printf("use: virtmem <npages> <nframes> <rand|fifo|lru|custom> <sort|scan|focus>\n");
 		return 1;
@@ -98,27 +123,32 @@ int main( int argc, char *argv[] )
 	const char *repAlg = argv[3];
 	const char *program = argv[4];
 	
+	bits = malloc(3*sizeof(int));
+	
 	numPages = npages;
 	numFrames = nframes;
 	if (numFrames > numPages) {
 		numFrames = numPages;
 	}
 	
-	table = malloc(numPages*sizeof(int));
+	queue = malloc(numPages*sizeof(int));
 	int i;
 	for (i = 0; i < numPages; i += 1) {
-		table[i] = 0;
+		queue[i] = 0;
 	}
 	rep = repAlg;
 	prog = program;
 
-	struct disk *disk = disk_open("myvirtualdisk",npages);
+	//struct disk *disk = disk_open("myvirtualdisk",npages);
+	disk = disk_open("myvirtualdisk",npages);
 	if(!disk) {
 		fprintf(stderr,"couldn't create virtual disk: %s\n",strerror(errno));
 		return 1;
-	} else {
+	} 
+	/*
+	else {
 		gdisk = disk;	
-	}
+	}*/
 
 
 	struct page_table *pt = page_table_create( npages, nframes, page_fault_handler );
@@ -127,9 +157,12 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
-	char *virtmem = page_table_get_virtmem(pt);
-
-	char *physmem = page_table_get_physmem(pt);
+	
+	//char * virtmem = page_table_get_virtmem(pt);
+	//char * physmem = page_table_get_physmem(pt);
+	
+	virtmem = page_table_get_virtmem(pt);
+	physmem = page_table_get_physmem(pt);
 
 	if(!strcmp(program,"sort")) {
 		sort_program(virtmem,npages*PAGE_SIZE);
@@ -148,16 +181,9 @@ int main( int argc, char *argv[] )
 	page_table_delete(pt);
 	disk_close(disk);
 
+	free(queue);
+	free(bits);
+
 	return 0;
-}
-
-void evict(int page, int frame) {
-	disk_write(gdisk,page, &physmem[frame*PAGE_SIZE]);
-	//go into mapTable and update info
-}
-
-void load(int page, int frame) {
-	disk read();
-	//go into mapTable and update info
 }
 
