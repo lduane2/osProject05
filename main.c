@@ -34,6 +34,7 @@ struct disk *disk;
 
 int currPageNumber = -1;
 int frameCounter = 0;
+int repeatCounter = 0;
 int phase = 1;
 
 int * queue;
@@ -85,6 +86,16 @@ void page_fault_handler( struct page_table *pt, int page )
 			}
 		} else if (!strcmp(rep,"custom")) {
 			//make up algorithm
+                        frame = frameCounter;
+                        printf("frame: %d \n", frame);
+                        repeatCounter++;
+                        if(repeatCounter == 2){
+                            repeatCounter = 0;
+                            frameCounter++;
+                            if(frameCounter == numFrames){
+                                frameCounter = 0;
+                            }
+                        }
 		}
 		
 		printf("here \n");
