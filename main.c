@@ -38,16 +38,17 @@ int currPageNumber = -1;
 int frameCounter = 0;
 int repeatCounter = 0;
 int phase = 1;
-int *lfu;
+int *lru;
+int lru_swap = 1;
 
 
 int * queue;
 
 int r = 0;
-
+/*
 int find_least_used(){
         int i;
-        int min = -100; int curr; int minframe = 0;
+        int min = -10000000; int curr; int minframe = 0;
         for(i = 0; i < numFrames; i = i + 1) {
                 curr = queue[i];
                 if(lfu[curr] > min ) {
@@ -58,18 +59,12 @@ int find_least_used(){
         //printf("%d\n", minframe);
         return minframe;
 }
+*/
 
-void reset_lfu(){
-    int i;
-    for(i = 0; i < numPages; i++){
-        lfu[i] = 0;
-    }
-}
 
 void page_fault_handler( struct page_table *pt, int page )
 {
         pageFaults++;
-        lfu[page] = lfu[page] + 1;
 	//printf("page fault on page #%d\n",page);
 	//virtmem = page_table_get_virtmem(pt);
 	physmem = page_table_get_physmem(pt);
@@ -90,13 +85,15 @@ void page_fault_handler( struct page_table *pt, int page )
 			disk_read(disk,page,&physmem[frame*PAGE_SIZE]);
                         diskReads++;
 			queue[frame] = page;
+                        lru[lru_swap] = frame;
+                        lru_swap = 1 - lru_swap;
 			//printf("queue[%d] = %d \n",frame, page);
 			frameCounter++;
 		} else {
 			page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
 		}
 	} else { //phase 2
-		page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
+		//page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
 		//return 0;
 	
 		//printf("%s \n", rep);
@@ -115,8 +112,12 @@ void page_fault_handler( struct page_table *pt, int page )
 		} else if (!strcmp(rep,"custom")) {
 			//make up algorithm
                         //printf("frame: %d \n", frame);
-                        frame = find_least_used();
-		}
+                        frame = lru[lru_swap];
+                        lru_swap = 1 - lru_swap;
+		} else {
+		    printf("use: virtmem <npages> <nframes> <rand|fifo|lru|custom> <sort|scan|focus>\n");
+		    exit(1);
+	        }          
 		
 		//printf("here \n");
 		
@@ -139,9 +140,6 @@ void page_fault_handler( struct page_table *pt, int page )
 		
 	}
         
-        if(pageFaults % 100 == 0){
-        //    reset_lfu();
-        }
 	//exit(1);
 }
 
@@ -152,9 +150,14 @@ int main( int argc, char *argv[] )
 		printf("use: virtmem <npages> <nframes> <rand|fifo|lru|custom> <sort|scan|focus>\n");
 		return 1;
 	}
-
-	int npages = atoi(argv[1]);
-	int nframes = atoi(argv[2]);
+        int npages, nframes;
+	if(atoi(argv[1]) && atoi(argv[2])){
+            npages = atoi(argv[1]);
+	    nframes = atoi(argv[2]);
+        } else {
+            printf("Your pages or frames are not numbers\n");
+            exit(1);
+        }
 	const char *repAlg = argv[3];
 	const char *program = argv[4];
 	
@@ -165,13 +168,14 @@ int main( int argc, char *argv[] )
 	if (numFrames > numPages) {
 		numFrames = numPages;
 	}
-        lfu = malloc(numPages*sizeof(int));
+        lru = malloc(2*sizeof(int));
+        lru[0] = 0;
+        lru[1] = 1;
 	
 	queue = malloc(numPages*sizeof(int));
 	int i;
 	for (i = 0; i < numPages; i += 1) {
 		queue[i] = 0;
-                lfu[i] = 0;
 	}
 	rep = repAlg;
 	prog = program;
