@@ -31,7 +31,9 @@ char * physmem;
 //struct disk *gdisk;
 struct disk *disk;
 
-
+int pageFaults = 0;
+int diskReads = 0;
+int diskWrites = 0;
 int currPageNumber = -1;
 int frameCounter = 0;
 int repeatCounter = 0;
@@ -43,13 +45,14 @@ int r = 0;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
-	printf("page fault on page #%d\n",page);
+        pageFaults++;
+	//printf("page fault on page #%d\n",page);
 	//virtmem = page_table_get_virtmem(pt);
 	physmem = page_table_get_physmem(pt);
 	//phase 1
 	//page_table_get_entry(pt,page,&frame,&bits);
 	if(frameCounter == numFrames) {
-		printf("We are here \n");
+		//printf("We are here \n");
 		phase = 2;
 		frameCounter = 0;
 	}
@@ -61,8 +64,9 @@ void page_fault_handler( struct page_table *pt, int page )
 			frame = frameCounter;
 			page_table_set_entry(pt,page,frame, PROT_READ);
 			disk_read(disk,page,&physmem[frame*PAGE_SIZE]);
+                        diskReads++;
 			queue[frame] = page;
-			printf("queue[%d] = %d \n",frame, page);
+			//printf("queue[%d] = %d \n",frame, page);
 			frameCounter++;
 		} else {
 			page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
@@ -71,15 +75,15 @@ void page_fault_handler( struct page_table *pt, int page )
 		page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
 		//return 0;
 	
-		printf("%s \n", rep);
+		//printf("%s \n", rep);
 		if (!strcmp(rep,"rand")) {
 			//srand(time(NULL));
 			r = rand()%numFrames;
 			frame = r;
-			printf("frame: %d \n",r);
+			//printf("frame: %d \n",r);
 		} else if (!strcmp(rep,"fifo")) {
 			frame = frameCounter;
-			printf("frame: %d \n", frame);
+			//printf("frame: %d \n", frame);
 			frameCounter++;
 			if (frameCounter == numFrames) {
 				frameCounter = 0;
@@ -87,7 +91,7 @@ void page_fault_handler( struct page_table *pt, int page )
 		} else if (!strcmp(rep,"custom")) {
 			//make up algorithm
                         frame = frameCounter;
-                        printf("frame: %d \n", frame);
+                        //printf("frame: %d \n", frame);
                         repeatCounter++;
                         if(repeatCounter == 2){
                             repeatCounter = 0;
@@ -98,19 +102,21 @@ void page_fault_handler( struct page_table *pt, int page )
                         }
 		}
 		
-		printf("here \n");
+		//printf("here \n");
 		
 		currPageNumber = queue[frame];
 		
 		if (bits[0] == 0) { //nothing there
 			disk_write(disk, currPageNumber, &physmem[frame*PAGE_SIZE]);
+                        diskWrites++;
 			disk_read(disk, page, &physmem[frame*PAGE_SIZE]);
+                        diskReads++;
 			page_table_set_entry(pt,page,frame,PROT_READ);
 			page_table_set_entry(pt,currPageNumber,0,0);
 			queue[frame] = page;
-			printf("queue[%d] = %d \n",frame, page);
+			//printf("queue[%d] = %d \n",frame, page);
 		} else if (bits[1] == 0) { //read but not write
-			printf("entered \n");
+			//printf("entered \n");
 			page_table_get_entry(pt,page,&frame,bits);
 			page_table_set_entry(pt,page,frame, PROT_READ|PROT_WRITE);
 		}
@@ -194,7 +200,7 @@ int main( int argc, char *argv[] )
 
 	free(queue);
 	free(bits);
-
+        printf("Page Faults: %d\nDisk Reads: %d\nDisk Writes: %d\n", pageFaults, diskReads, diskWrites);
 	return 0;
 }
 
