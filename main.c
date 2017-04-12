@@ -38,14 +38,38 @@ int currPageNumber = -1;
 int frameCounter = 0;
 int repeatCounter = 0;
 int phase = 1;
+int *lfu;
+
 
 int * queue;
 
 int r = 0;
 
+int find_least_used(){
+        int i;
+        int min = -100; int curr; int minframe = 0;
+        for(i = 0; i < numFrames; i = i + 1) {
+                curr = queue[i];
+                if(lfu[curr] > min ) {
+                    min = lfu[curr];
+                    minframe = i;
+                }
+        }
+        //printf("%d\n", minframe);
+        return minframe;
+}
+
+void reset_lfu(){
+    int i;
+    for(i = 0; i < numPages; i++){
+        lfu[i] = 0;
+    }
+}
+
 void page_fault_handler( struct page_table *pt, int page )
 {
         pageFaults++;
+        lfu[page] = lfu[page] + 1;
 	//printf("page fault on page #%d\n",page);
 	//virtmem = page_table_get_virtmem(pt);
 	physmem = page_table_get_physmem(pt);
@@ -90,16 +114,8 @@ void page_fault_handler( struct page_table *pt, int page )
 			}
 		} else if (!strcmp(rep,"custom")) {
 			//make up algorithm
-                        frame = frameCounter;
                         //printf("frame: %d \n", frame);
-                        repeatCounter++;
-                        if(repeatCounter == 2){
-                            repeatCounter = 0;
-                            frameCounter++;
-                            if(frameCounter == numFrames){
-                                frameCounter = 0;
-                            }
-                        }
+                        frame = find_least_used();
 		}
 		
 		//printf("here \n");
@@ -122,8 +138,10 @@ void page_fault_handler( struct page_table *pt, int page )
 		}
 		
 	}
-
-	
+        
+        if(pageFaults % 100 == 0){
+        //    reset_lfu();
+        }
 	//exit(1);
 }
 
@@ -147,11 +165,13 @@ int main( int argc, char *argv[] )
 	if (numFrames > numPages) {
 		numFrames = numPages;
 	}
+        lfu = malloc(numPages*sizeof(int));
 	
 	queue = malloc(numPages*sizeof(int));
 	int i;
 	for (i = 0; i < numPages; i += 1) {
 		queue[i] = 0;
+                lfu[i] = 0;
 	}
 	rep = repAlg;
 	prog = program;
