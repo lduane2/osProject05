@@ -45,8 +45,7 @@ int * queue;
 int r = 0;
 
 
-void page_fault_handler( struct page_table *pt, int page )
-{
+void page_fault_handler( struct page_table *pt, int page ) {
     pageFaults++;
     physmem = page_table_get_physmem(pt);
     //phase 1
@@ -110,8 +109,7 @@ void page_fault_handler( struct page_table *pt, int page )
 
 }
 
-int main( int argc, char *argv[] )
-{
+int main( int argc, char *argv[] ) {
     srand(time(NULL));
     if(argc!=5) {
         printf("use: virtmem <npages> <nframes> <rand|fifo|lru|custom> <sort|scan|focus>\n");
@@ -172,13 +170,10 @@ int main( int argc, char *argv[] )
 
     if(!strcmp(program,"sort")) {
         sort_program(virtmem,npages*PAGE_SIZE);
-
     } else if(!strcmp(program,"scan")) {
         scan_program(virtmem,npages*PAGE_SIZE);
-
     } else if(!strcmp(program,"focus")) {
         focus_program(virtmem,npages*PAGE_SIZE);
-
     } else {
         fprintf(stderr,"unknown program: %s\n",argv[3]);
         return 1;
@@ -186,10 +181,12 @@ int main( int argc, char *argv[] )
 
     page_table_delete(pt);
     disk_close(disk);
-
+    
+    //release malloc'd data
     free(queue);
     free(bits);
     free(lru);
+    //print results!
     printf("Page Faults: %d\nDisk Reads: %d\nDisk Writes: %d\n", pageFaults, diskReads, diskWrites);
     return 0;
 }
